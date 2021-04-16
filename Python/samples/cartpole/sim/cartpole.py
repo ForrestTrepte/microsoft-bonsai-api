@@ -55,6 +55,7 @@ class CartPole:
         initial_pole_angle: float = 0,
         initial_angular_velocity: float = 0,
         target_pole_position: float = 0,
+        array = None,
     ):
         self._cart_mass = cart_mass  # (kg)
         self._pole_mass = pole_mass  # (kg)
@@ -65,6 +66,10 @@ class CartPole:
         self._pole_angular_velocity = initial_angular_velocity  # (rad/s)
         self._target_pole_position = target_pole_position  # (m)
         self._update_pole_center_state()
+        if array is not None:
+            print(f"Received config array! {array}")
+            self._cart_position = array[0]
+            self.__cart_velocity = array[1]
 
     def _update_pole_center_state(self):
         """
@@ -140,6 +145,7 @@ class CartPole:
             "cart_mass": self._cart_mass,
             "pole_mass": self._pole_mass,
             "pole_length": self._pole_length,
+            "array": [self._cart_position, self._cart_velocity]
         }
 
 

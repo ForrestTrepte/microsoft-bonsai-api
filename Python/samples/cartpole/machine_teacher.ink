@@ -1,70 +1,74 @@
-# https://docs.microsoft.com/en-us/bonsai/inkling/basics
+# This sample demonstrates how to teach a policy for controlling
+# a cartpole (inverted pendulum) device.
+
 inkling "2.0"
+
 using Math
 using Goal
 
-# The maximum angle (in radians) before fallover or failure
-const MaxPoleAngle = (12 * 2 * Math.Pi) / 360
 # Length of the cartpole track in meters
-const TrackLength = 2.0
-const MaxPosition = TrackLength / 2
+const TrackLength = 0.5
 
+# Maximum angle of pole in radians before it has fallen
+const MaxPoleAngle = (12 * Math.Pi) / 180
 
-# These are all the values the sim produces
+# Type that represents the per-iteration state returned by simulator
 type SimState {
-    cart_position: number,  # (m). 0 is the center of the track
-    cart_velocity: number,  # (m/s)
-    pole_angle: number,  # (rad). 0 is vertical.
-    pole_angular_velocity: number,  # (rad/s)
-    pole_center_position: number,  # (m) -- x position of the center of the pole 
-    pole_center_velocity: number,  # (m/s) -- x velocity of the center of the pole
-    target_pole_position: number,  # (m)
+    # Position of cart in meters
+    cart_position: number,
 
-    # physical params from the config are available too
-    cart_mass: number,  # (kg)
-    pole_mass: number,  # (kg)
-    pole_length: number,  # (m)
+    # Velocity of cart in meters/sec
+    cart_velocity: number,
+
+    # Current angle of pole in radians
+    pole_angle: number,
+
+    # Angular velocity of the pole in radians/sec
+    pole_angular_velocity: number,
+
+    array: number[2],
 }
 
-# This is a subset of the SimState that we'll make available to the brain
-# (these should all be values that will be available to a deployed brain)
-type ObservedState {
-    cart_position: number,  # (m). 0 is the center of the track
-    cart_velocity: number,  # (m/s)
-    pole_angle: number,  # (rad). 0 is vertical.
-    pole_angular_velocity: number,  # (rad/s)
-}
-
-type Action {
-    # Force to apply, up to the max force magnitude (1 Newton by default)
-    command: number<-1..1>
-}
-
-# Configuration variables for the simulator
 type SimConfig {
-    cart_mass: number,  # (kg), default 0.31
-    pole_mass: number,  # (kg), default 0.055
-    pole_length: number,  # (m), default 0.4
-    initial_cart_position: number<-MaxPosition .. MaxPosition>,  # (m), default 0 (center)
-    initial_cart_velocity: number,   # (m/s), default 0
-    initial_pole_angle: number,  # (rad), default 0
-    initial_angular_velocity: number,  # (rad/s), default 0
-    target_pole_position: number<-MaxPosition .. MaxPosition>,  # (m), default 0
+    array: number[2]
 }
 
-graph (input: ObservedState): Action {
-    concept BalancePole(input): Action {
+# Type that represents the per-iteration action accepted by the simulator
+type SimAction {
+    # Amount of force in x direction to apply to the cart.
+    command: number<-1 .. 1>
+}
+
+# Define a concept graph with a single concept
+graph (input: SimState): SimAction {
+    concept BalancePole(input): SimAction {
         curriculum {
-            source simulator (Action: Action, Config: SimConfig): SimState {
+            # The source of training for this concept is a simulator
+            # that takes an action as an input and outputs a state.
+            source simulator (Action: SimAction, Config: SimConfig): SimState {
+                # Automatically launch the simulator with this
+                # registered package name.
+                #package "Cartpole"
             }
+
             training {
-                EpisodeIterationLimit: 200,
+                # Limit the number of iterations per episode to 120. The default
+                # is 1000, which makes it much tougher to succeed.
+                EpisodeIterationLimit: 120
             }
-            goal (SimState: SimState) {
-                avoid FallOver:
-                    Math.Abs(SimState.pole_angle) in Goal.RangeAbove(MaxPoleAngle)
-                avoid OutOfRange:
-                    Math.Abs(SimState.cart_position) in Goal.RangeAbove(MaxPosition)
+
+            # The objective of training is expressed as a goal with two
+            # subgoals: don't let the pole fall over, and don't move
+            # the cart off the track.
+            goal (State: SimState) {
+                avoid `Fall Over`: Math.Abs(State.pole_angle) in Goal.RangeAbove(MaxPoleAngle)
+                avoid `Out Of Range`: Math.Abs(State.cart_position) in Goal.RangeAbove(TrackLength / 2)
+            }            
+
+            lesson `Randomize Goal` {
+                scenario {
+                    array: number<.100 .. .105>[2]
+                }
             }
         }
     }
